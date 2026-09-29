@@ -1,0 +1,24 @@
+{
+  "name": "playwright",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:login": "playwright test login.spec.ts --workers=1 --headed",
+    "test:chat": "playwright test chat-send.spec.ts chat-receive.spec.ts --workers=2 --headed",
+    "test:camera": "playwright test camera-send.spec.ts camera-receive.spec.ts --workers=2 --headed",
+    "report": "playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0"
+  },
+  "dependencies": {
+    "clipboardy": "^5.3.2",
+    "dotenv": "^17.4.2"
+  }
+}
