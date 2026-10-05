@@ -15,8 +15,8 @@ test("Admin", async ({ page }) => {
     fs.unlinkSync("join-url.json");
   }
 
-  if (fs.existsSync("user-joined.json")) {
-    fs.unlinkSync("user-joined.json");
+  if (fs.existsSync("user-requested.json")) {
+    fs.unlinkSync("user-requested.json");
   }
 
   await page.goto(env.APP_LOGIN_URL);
@@ -34,14 +34,20 @@ test("Admin", async ({ page }) => {
   const page1Promise = page.waitForEvent("popup");
 
   await page
-    .getByRole("button", { name: "lightning charge Tạo nhanh cu" })
+    .getByRole("button", {
+      name: "lightning charge Tạo nhanh cu",
+    })
     .click();
 
   const page1 = await page1Promise;
 
-  await page1.getByRole("button", { name: "Sao chép" }).click();
+  await page1.getByRole("button", {
+    name: "Sao chép",
+  }).click();
 
-  const tooltipText = await page1.locator("#tippy-1").innerText();
+  const tooltipText = await page1
+    .locator("#tippy-1")
+    .innerText();
 
   const match = tooltipText.match(
     /https:\/\/gomesainterk06\.vnpt\.vn\/app\/#\/join\/[a-zA-Z0-9]+(\?accessCode=[a-zA-Z0-9]+)?/
@@ -53,7 +59,7 @@ test("Admin", async ({ page }) => {
 
   const joinUrl = match[0];
 
-  console.log("Worker 1 - Join URL:", joinUrl);
+  console.log("Admin - Join URL:", joinUrl);
 
   fs.writeFileSync(
     "join-url.json",
@@ -62,12 +68,15 @@ test("Admin", async ({ page }) => {
   );
 
   await page1
-    .getByRole("button", { name: "Đặt lại thời gian chờ" })
+    .getByRole("button", {
+      name: "Đặt lại thời gian chờ",
+    })
     .click();
 
+  // Chờ User gửi request
   await expect
     .poll(
-      () => fs.existsSync("user-joined.json"),
+      () => fs.existsSync("user-requested.json"),
       {
         timeout: 60_000,
         intervals: [500],
@@ -75,11 +84,30 @@ test("Admin", async ({ page }) => {
     )
     .toBe(true);
 
+  console.log("Admin - User đã gửi yêu cầu");
+
+  // Chờ request hiển thị trên UI
+  await expect(
+    page1.getByRole("button", {
+      name: "Có 1 yêu cầu tham gia ",
+    })
+  ).toBeVisible({
+    timeout: 60_000,
+  });
+
+  console.log("Admin - Request đã xuất hiện");
+
   await page1
-    .getByRole("button", { name: "Có 1 yêu cầu tham gia " })
+    .getByRole("button", {
+      name: "Có 1 yêu cầu tham gia ",
+    })
     .click();
 
+  console.log("Admin - Đã mở danh sách yêu cầu");
+
   await page1.getByTitle("Cho phép").click();
+
+  console.log("Admin - Đã cho phép User tham gia");
 
   await page1
     .getByRole("button", {
@@ -88,19 +116,15 @@ test("Admin", async ({ page }) => {
     })
     .click();
 
-  await page1
-    .getByRole("button", {
-      name: "Kết thúc cuộc họp",
-    })
-    .click();
+  await page1.getByRole("button", {
+    name: "Kết thúc cuộc họp",
+  }).click();
 
   const downloadPromise = page1.waitForEvent("download");
 
-  await page1
-    .getByRole("button", {
-      name: "Kết thúc",
-    })
-    .click();
+  await page1.getByRole("button", {
+    name: "Kết thúc",
+  }).click();
 
   const download = await downloadPromise;
 
@@ -111,4 +135,6 @@ test("Admin", async ({ page }) => {
   await download.saveAs(
     `downloads/${download.suggestedFilename()}`
   );
+
+  console.log("Admin - Test passed");
 });

@@ -16,7 +16,7 @@ test("User", async ({ page }) => {
     fs.readFileSync("join-url.json", "utf-8")
   );
 
-  console.log("Worker 2 - Join URL:", joinUrl);
+  console.log("User - Join URL:", joinUrl);
 
   await page.goto(joinUrl);
 
@@ -28,7 +28,14 @@ test("User", async ({ page }) => {
     .getByRole("button", { name: "Tham gia" })
     .click();
 
-  fs.writeFileSync("user-joined.json", "true", "utf-8");
+  // Chỉ báo cho Admin rằng User đã gửi request
+  fs.writeFileSync(
+    "user-requested.json",
+    JSON.stringify({ requested: true }),
+    "utf-8"
+  );
+
+  console.log("User - Đã gửi yêu cầu tham gia");
 
   const micButton = page.getByRole("button", {
     description: "Bật/Tắt Mic",
@@ -40,11 +47,16 @@ test("User", async ({ page }) => {
     exact: true,
   });
 
+  // Chờ Admin cho phép User vào phòng
   await micButton.waitFor({
     state: "visible",
     timeout: 60_000,
   });
 
+  console.log("User - Đã được Admin cho phép vào phòng");
+
   await micButton.click();
   await cameraButton.click();
+
+  console.log("User - Test passed");
 });
