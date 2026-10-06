@@ -6,17 +6,30 @@ dotenv.config();
 export default defineConfig({
   testDir: "./tests",
 
-  fullyParallel: true,
+  // Không để Playwright tự parallel các test bên trong cùng project
+  fullyParallel: false,
 
   forbidOnly: !!process.env.CI,
 
   retries: process.env.CI ? 2 : 0,
 
+  // 1 worker cho Admin + 1 worker cho User
   workers: 2,
 
   reporter: [
-    ["html", { outputFolder: "playwright-report", open: "never" }],
-    ["json",{outputFile: 'result.json'}],
+    [
+      "html",
+      {
+        outputFolder: "playwright-report",
+        open: "never",
+      },
+    ],
+    [
+      "json",
+      {
+        outputFile: "test-results/result.json",
+      },
+    ],
     ["list"],
   ],
 
@@ -26,21 +39,34 @@ export default defineConfig({
     screenshot: "on",
     video: "on",
     trace: "on",
-    permissions: ["clipboard-read", "clipboard-write"],
+
     headless: false,
+
+    permissions: [
+      "clipboard-read",
+      "clipboard-write",
+    ],
   },
 
   projects: [
-    // =========================
-    // CHROMIUM
-    // =========================
+    // ============================================================
+    // ADMIN
+    // ============================================================
+
     {
-      name: "chromium",
+      name: "admin",
+
+      testMatch: /admin\.spec\.ts/,
 
       use: {
         ...devices["Desktop Chrome"],
 
-        permissions: ["camera", "microphone"],
+        permissions: [
+          "camera",
+          "microphone",
+          "clipboard-read",
+          "clipboard-write",
+        ],
 
         launchOptions: {
           args: [
@@ -51,16 +77,32 @@ export default defineConfig({
       },
     },
 
-    // =========================
-    // FIREFOX
-    // =========================
-    // {
-    //   name: "firefox",
+    // ============================================================
+    // USER
+    // ============================================================
 
-    //   use: {
-    //     ...devices["Desktop Firefox"],
-    //   },
-    // },
+    {
+      name: "user",
+
+      testMatch: /user\.spec\.ts/,
+
+      use: {
+        ...devices["Desktop Chrome"],
+
+        permissions: [
+          "camera",
+          "microphone",
+          "clipboard-read",
+          "clipboard-write",
+        ],
+
+        launchOptions: {
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--autoplay-policy=no-user-gesture-required",
+          ],
+        },
+      },
+    },
   ],
-}
-);
+});

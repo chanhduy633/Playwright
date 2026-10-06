@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import fs from "fs";
+import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -10,35 +11,104 @@ const env = {
   APP_LOGIN_URL: process.env.APP_LOGIN_URL!,
 };
 
+const DATA_DIR = path.resolve("test-data");
+
+const JOIN_URL_FILE = path.join(
+  DATA_DIR,
+  "join-url.json"
+);
+
+const ADMIN_READY_FILE = path.join(
+  DATA_DIR,
+  "admin-ready.json"
+);
+
+const USER_REQUESTED_FILE = path.join(
+  DATA_DIR,
+  "user-requested.json"
+);
+
 test("Admin", async ({ page }) => {
-  test.setTimeout(60_000);
-
-  // Xóa file cũ
-  if (fs.existsSync("join-url.json")) {
-    fs.unlinkSync("join-url.json");
+  test.setTimeout(120_000);
+  
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, {
+      recursive: true,
+    });
   }
+  // ============================================================
+  // 1. RESET STATE
+  // ============================================================
 
-  if (fs.existsSync("user-requested.json")) {
-    fs.unlinkSync("user-requested.json");
-  }
+  // Không xóa join-url.json
+  // Chỉ reset nội dung
+  fs.writeFileSync(
+    JOIN_URL_FILE,
+    JSON.stringify({}, null, 2),
+    "utf-8"
+  );
 
-  // Login
-  await page.goto(env.APP_LOGIN_URL);
+  // Reset trạng thái Admin
+  fs.writeFileSync(
+    ADMIN_READY_FILE,
+    JSON.stringify(
+      {
+        ready: false,
+      },
+      null,
+      2
+    ),
+    "utf-8"
+  );
+
+  // Reset trạng thái User
+  fs.writeFileSync(
+    USER_REQUESTED_FILE,
+    JSON.stringify(
+      {
+        requested: false,
+      },
+      null,
+      2
+    ),
+    "utf-8"
+  );
+
+  console.log("Admin - Đã reset state");
+
+  // ============================================================
+  // 2. LOGIN
+  // ============================================================
+
+  await page.goto(env.APP_LOGIN_URL, {
+    waitUntil: "domcontentloaded",
+  });
 
   await page
-    .getByRole("textbox", { name: "Tài khoản" })
+    .getByRole("textbox", {
+      name: "Tài khoản",
+    })
     .fill(env.APP_USERNAME);
 
   await page
-    .getByRole("textbox", { name: "Mật khẩu" })
+    .getByRole("textbox", {
+      name: "Mật khẩu",
+    })
     .fill(env.APP_PASSWORD);
 
   await page
-    .getByRole("button", { name: "Đăng nhập" })
+    .getByRole("button", {
+      name: "Đăng nhập",
+    })
     .click();
 
-  // Tạo meeting
-  const page1Promise = page.waitForEvent("popup");
+  console.log("Admin - Đã login");
+
+  // ============================================================
+  // 3. TẠO MEETING
+  // ============================================================
+
+  const popupPromise = page.waitForEvent("popup");
 
   await page
     .getByRole("button", {
@@ -46,81 +116,192 @@ test("Admin", async ({ page }) => {
     })
     .click();
 
-  const page1 = await page1Promise;
+  const meetingPage = await popupPromise;
 
-  // Copy Join URL
-  await page1
+  await meetingPage.waitForLoadState("domcontentloaded");
+
+  console.log("Admin - Meeting đã được tạo");
+
+  // ============================================================
+  // 4. COPY JOIN URL
+  // ============================================================
+
+  await meetingPage
     .getByRole("button", {
       name: "Sao chép",
     })
     .click();
 
-  const tooltipText = await page1
-    .locator("#tippy-1")
-    .innerText();
+  const clipboardText = await meetingPage.evaluate(
+    async () => {
+      return await navigator.clipboard.readText();
+    }
+  );
 
-  const match = tooltipText.match(
+  console.log(
+    "Admin - Clipboard:",
+    clipboardText
+  );
+
+  const match = clipboardText.match(
     /https?:\/\/gomesainterk06\.vnpt\.vn\/app\/#\/join\/[a-zA-Z0-9]+(\?accessCode=[a-zA-Z0-9]+)?/
   );
 
   if (!match) {
-    throw new Error("Không tìm thấy Join URL");
+    throw new Error(
+      `Không tìm thấy Join URL: ${clipboardText}`
+    );
   }
 
   const joinUrl = match[0];
 
-  console.log("Admin - Join URL:", joinUrl);
+  console.log(
+    "Admin - Join URL:",
+    joinUrl
+  );
 
-  // Ghi Join URL cho User worker
+  // ============================================================
+  // 5. GHI JOIN URL MỚI
+  // ============================================================
+
   fs.writeFileSync(
-    "join-url.json",
-    JSON.stringify({ joinUrl }),
+    JOIN_URL_FILE,
+    JSON.stringify(
+      {
+        joinUrl,
+        createdAt: new Date().toISOString(),
+      },
+      null,
+      2
+    ),
     "utf-8"
   );
 
-  // Reset thời gian chờ
-  await page1
+  console.log(
+    "Admin - Đã ghi Join URL mới"
+  );
+
+  // ============================================================
+  // 6. RESET THỜI GIAN CHỜ
+  // ============================================================
+
+  await meetingPage
     .getByRole("button", {
       name: "Đặt lại thời gian chờ",
     })
     .click();
 
-  // Chờ User gửi request
+  console.log(
+    "Admin - Đã reset thời gian chờ"
+  );
+
+  // ============================================================
+  // 7. BÁO CHO USER:
+  //    ADMIN ĐÃ SẴN SÀNG
+  // ============================================================
+
+  fs.writeFileSync(
+    ADMIN_READY_FILE,
+    JSON.stringify(
+      {
+        ready: true,
+        joinUrl,
+        readyAt: new Date().toISOString(),
+      },
+      null,
+      2
+    ),
+    "utf-8"
+  );
+
+  console.log(
+    "Admin - Đã báo READY cho User"
+  );
+
+  // ============================================================
+  // 8. CHỜ USER GỬI REQUEST
+  // ============================================================
+
   await expect
     .poll(
-      () => fs.existsSync("user-requested.json"),
+      () => {
+        if (!fs.existsSync(USER_REQUESTED_FILE)) {
+          return false;
+        }
+
+        try {
+          const data = JSON.parse(
+            fs.readFileSync(
+              USER_REQUESTED_FILE,
+              "utf-8"
+            )
+          );
+
+          return data.requested === true;
+        } catch {
+          return false;
+        }
+      },
       {
         timeout: 60_000,
-        intervals: [500],
+        intervals: [200, 500, 1000],
       }
     )
     .toBe(true);
 
-  console.log("Admin - User đã gửi yêu cầu");
+  console.log(
+    "Admin - User đã gửi request"
+  );
 
-  // Chờ request xuất hiện trên UI
-  await expect(
-    page1.getByRole("button", {
+  // ============================================================
+  // 9. CHỜ REQUEST XUẤT HIỆN TRÊN UI
+  // ============================================================
+
+  const requestButton =
+    meetingPage.getByRole("button", {
       name: "Có 1 yêu cầu tham gia ",
-    })
-  ).toBeVisible({
+    });
+
+  await expect(requestButton).toBeVisible({
     timeout: 60_000,
   });
 
-  console.log("Admin - Request đã xuất hiện");
+  console.log(
+    "Admin - Request đã xuất hiện"
+  );
 
-  // Mở danh sách request
-  await page1
-    .getByRole("button", {
-      name: "Có 1 yêu cầu tham gia ",
-    })
-    .click();
+  // ============================================================
+  // 10. MỞ REQUEST
+  // ============================================================
 
-  console.log("Admin - Đã mở danh sách yêu cầu");
+  await requestButton.click();
 
-  // Cho phép User
-  await page1.getByTitle("Cho phép").click();
+  console.log(
+    "Admin - Đã mở danh sách request"
+  );
 
-  console.log("Admin - Đã cho phép User tham gia");
-  console.log("Admin - Test passed");
+  // ============================================================
+  // 11. APPROVE USER
+  // ============================================================
+
+  const allowButton =
+    meetingPage.getByTitle("Cho phép");
+
+  await expect(allowButton).toBeVisible({
+    timeout: 10_000,
+  });
+
+  await allowButton.click();
+
+  console.log(
+    "Admin - Đã cho phép User"
+  );
+
+  // ============================================================
+  // 12. ADMIN PASS
+  // ============================================================
+
+  console.log(
+    "Admin - Test passed"
+  );
 });

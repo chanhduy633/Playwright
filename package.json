@@ -7,6 +7,7 @@
     "test:login": "playwright test login.spec.ts --workers=1 --headed",
     "test:chat": "playwright test chat-send.spec.ts chat-receive.spec.ts --workers=2 --headed",
     "test:camera": "playwright test camera-send.spec.ts camera-receive.spec.ts --workers=2 --headed",
+    "test:join": "playwright test admin.spec.ts user.spec.ts --workers=2 --headed",
     "report": "playwright show-report"
   },
   "keywords": [],

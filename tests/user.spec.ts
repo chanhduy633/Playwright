@@ -1,71 +1,220 @@
 import { test, expect } from "@playwright/test";
+import path from "path";
 import fs from "fs";
 
-test("User", async ({ page }) => {
-  test.setTimeout(60_000);
+const DATA_DIR = path.resolve("test-data");
 
-  // Chờ Admin tạo Join URL
+const JOIN_URL_FILE = path.join(
+  DATA_DIR,
+  "join-url.json"
+);
+
+const ADMIN_READY_FILE = path.join(
+  DATA_DIR,
+  "admin-ready.json"
+);
+
+const USER_REQUESTED_FILE = path.join(
+  DATA_DIR,
+  "user-requested.json"
+);
+
+test("User", async ({ page }) => {
+  test.setTimeout(120_000);
+
+  // ============================================================
+  // 1. CHỜ ADMIN READY
+  // ============================================================
+ if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, {
+      recursive: true,
+    });
+  }
+  
+  console.log(
+    "User - Đang chờ Admin ready..."
+  );
+
   await expect
     .poll(
-      () => fs.existsSync("join-url.json"),
+      () => {
+        if (!fs.existsSync(ADMIN_READY_FILE)) {
+          return false;
+        }
+
+        try {
+          const data = JSON.parse(
+            fs.readFileSync(
+              ADMIN_READY_FILE,
+              "utf-8"
+            )
+          );
+
+          return data.ready === true;
+        } catch {
+          return false;
+        }
+      },
       {
         timeout: 60_000,
-        intervals: [500],
+        intervals: [200, 500, 1000],
       }
     )
     .toBe(true);
 
-  const { joinUrl } = JSON.parse(
-    fs.readFileSync("join-url.json", "utf-8")
+  console.log(
+    "User - Admin đã ready"
   );
 
-  console.log("User - Join URL:", joinUrl);
+  // ============================================================
+  // 2. ĐỌC JOIN URL
+  // ============================================================
 
-  // Mở Join URL
-  await page.goto(joinUrl);
+  const data = JSON.parse(
+    fs.readFileSync(
+      JOIN_URL_FILE,
+      "utf-8"
+    )
+  );
 
-  await page
-    .getByRole("textbox", {
+  const joinUrl = data.joinUrl;
+
+  expect(
+    joinUrl,
+    "join-url.json không có joinUrl"
+  ).toBeTruthy();
+
+  console.log(
+    "User - Join URL:",
+    joinUrl
+  );
+
+  // ============================================================
+  // 3. MỞ JOIN URL
+  // ============================================================
+
+  await page.goto(joinUrl, {
+    waitUntil: "domcontentloaded",
+  });
+
+  console.log(
+    "User - Đã mở Join URL"
+  );
+
+  // ============================================================
+  // 4. NHẬP TÊN
+  // ============================================================
+
+  const nameInput =
+    page.getByRole("textbox", {
       name: "Họ và tên *",
-    })
-    .fill("Devtest");
+    });
 
-  // Click tham gia
-  await page
-    .getByRole("button", {
+  await expect(nameInput).toBeVisible({
+    timeout: 30_000,
+  });
+
+  await nameInput.fill("Devtest");
+
+  // ============================================================
+  // 5. CLICK THAM GIA
+  // ============================================================
+
+  const joinButton =
+    page.getByRole("button", {
       name: "Tham gia",
-    })
-    .click();
+    });
 
-  console.log("User - Đã click Tham gia");
+  await expect(joinButton).toBeEnabled({
+    timeout: 10_000,
+  });
 
-  // Chờ UI xử lý sau khi click
-  await page.waitForTimeout(2_000);
+  await joinButton.click();
 
-  console.log("User - URL sau khi click:", page.url());
+  console.log(
+    "User - Đã click Tham gia"
+  );
 
-  // Báo cho Admin rằng User đã gửi yêu cầu
+  // ============================================================
+  // 6. CHỜ URL THAY ĐỔI
+  // ============================================================
+
+  await expect
+    .poll(
+      () => page.url(),
+      {
+        timeout: 30_000,
+        intervals: [200, 500, 1000],
+      }
+    )
+    .not.toBe(joinUrl);
+
+  console.log(
+    "User - URL sau khi click:",
+    page.url()
+  );
+
+  // ============================================================
+  // 7. BÁO CHO ADMIN REQUEST
+  // ============================================================
+
   fs.writeFileSync(
-    "user-requested.json",
-    JSON.stringify({
-      requested: true,
-    }),
+    USER_REQUESTED_FILE,
+    JSON.stringify(
+      {
+        requested: true,
+        requestedAt:
+          new Date().toISOString(),
+      },
+      null,
+      2
+    ),
     "utf-8"
   );
 
-  console.log("User - Đã gửi yêu cầu tham gia");
+  console.log(
+    "User - Đã báo request cho Admin"
+  );
 
-  // Chờ Admin xử lý request
+  // ============================================================
+  // 8. CHỜ ADMIN APPROVE
+  // ============================================================
+
   await expect
     .poll(
       () => page.url(),
       {
         timeout: 60_000,
-        intervals: [500],
+        intervals: [200, 500, 1000],
       }
     )
     .toContain("/room");
 
-  console.log("User - Đã vào phòng");
-  console.log("User - Test passed");
+  console.log(
+    "User - Đã vào phòng"
+  );
+  await page.waitForTimeout(5_000);
+
+  console.log("User - Đã ở trong phòng 5 giây");
+  // ============================================================
+  // 9. RESET JOIN URL
+  // ============================================================
+
+  fs.writeFileSync(
+    JOIN_URL_FILE,
+    JSON.stringify({}, null, 2),
+    "utf-8"
+  );
+
+  console.log(
+    "User - Đã reset join-url.json"
+  );
+
+  // ============================================================
+  // 10. USER PASS
+  // ============================================================
+
+  console.log(
+    "User - Test passed"
+  );
 });
